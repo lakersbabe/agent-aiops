@@ -4,11 +4,8 @@
 
 **企业级多 Agent 智能运维平台 | Python · Java · Go 三语言实现**
 
-**面向大厂面试的完整项目：代码 + 架构文档 + 八股文 + 简历模板 + STAR 话术**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)](python/)
-[![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](java/)
-[![Go](https://img.shields.io/badge/Go-1.23-cyan?logo=go)](golang/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 </div>
