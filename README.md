@@ -1,8 +1,8 @@
-# 🤖 Multi-Agent AIOps — 多 Agent 智能运维系统
+# Agent AIOps — 多 Agent 智能运维系统
 
 <div align="center">
 
-**企业级多 Agent 智能运维平台 | Python · Java · Go 三语言实现**
+**企业级多 Agent 智能运维平台 | Python实现**
 
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)](python/)
@@ -171,7 +171,7 @@ python -c "import asyncio; from core.orchestrator import run_demo; asyncio.run(r
 ## 📁 项目结构详解
 
 ```
-multi-agent-aiops/
+agent-aiops/
 │
 ├── 📄 README.md                     ← 你现在看的这个文件
 │
@@ -195,38 +195,6 @@ multi-agent-aiops/
 │   │   └── settings.py              ← 全局配置
 │   ├── docker-compose.yml           ← 一键启动基础设施
 │   └── requirements.txt             ← Python 依赖
-│
-├── ☕ java/                          ← Java 实现（Spring Boot 3）
-│   ├── src/main/java/com/aiops/
-│   │   ├── agent/                   ← 4 个 Agent 实现
-│   │   ├── core/                    ← 编排器 + REST Controller
-│   │   └── model/                   ← 数据模型
-│   ├── pom.xml                      ← Maven 依赖
-│   └── src/main/resources/
-│       └── application.yml          ← Spring 配置
-│
-├── 🐹 golang/                       ← Go 实现（Gin + goroutine）
-│   ├── cmd/server/main.go           ← 程序入口
-│   ├── internal/
-│   │   ├── agent/                   ← 4 个 Agent 实现
-│   │   ├── core/                    ← 编排器
-│   │   └── model/                   ← 数据模型
-│   └── go.mod                       ← Go 依赖
-│
-└── 📚 docs/                         ← 文档（面试必看）
-    ├── architecture.md              ← 架构设计文档
-    ├── project-plan.md              ← 项目规划
-    ├── interview/                   ← 🎯 面试材料
-    │   ├── resume-template.md       ← 简历模板（3 个版本）
-    │   ├── star-method.md           ← STAR 话术（含追问应对）
-    │   ├── baguwen.md               ← 八股文 25 道
-    │   └── interview-qa.md          ← 面试 Q&A 80+ 道
-    └── tutorial/                   ← 📖 从 0 到部署教程
-        ├── 01-getting-started.md    ← 入门：理解项目结构
-        ├── 02-event-driven.md       ← 事件驱动架构详解
-        ├── 03-agent-design.md       ← Agent 设计模式
-        ├── 04-knowledge-graph.md    ← 知识图谱详解
-        └── 05-deploy.md             ← 生产部署指南
 ```
 
 ---
