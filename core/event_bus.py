@@ -57,6 +57,7 @@ class InMemoryEventBus(EventBus):
         self._running = False
         self._event_log: list[dict[str, Any]] = []
 
+    #接收一个事件，先把它记录下来，然后找到订阅这个 Topic 的处理函数，逐个直接调用。
     async def publish(self, topic: str, event: BaseModel) -> None:
         event_data = event.model_dump(mode="json")
         self._event_log.append({
@@ -66,12 +67,14 @@ class InMemoryEventBus(EventBus):
         })
         logger.info(f"[EventBus] Published to {topic}: {event_data.get('event_type', 'unknown')}")
 
+        #根据 topic 找到 handler
         for group_id, handler in self._subscribers.get(topic, []):
             try:
                 await handler(event_data)
             except Exception as e:
                 logger.error(f"[EventBus] Handler error in group {group_id}: {e}")
 
+    #把一个处理函数登记到某个 Topic 下，告诉事件总线以后收到该 Topic 的消息时调用它。
     async def subscribe(
         self, topic: str, group_id: str, handler: Callable
     ) -> None:
@@ -111,9 +114,11 @@ class KafkaEventBus(EventBus):
         self._consumers: list = []
         self._running = False
 
+    #把一个 Pydantic 事件对象序列化成 JSON，然后发送到 Kafka 指定的 Topic。
     async def publish(self, topic: str, event: BaseModel) -> None:
         from confluent_kafka import Producer
 
+        #第一次调用时创建 Producer
         if self._producer is None:
             self._producer = Producer({
                 "bootstrap.servers": self._bootstrap_servers,
@@ -126,11 +131,12 @@ class KafkaEventBus(EventBus):
         self._producer.produce(
             topic=topic,
             value=event_data.encode("utf-8"),
-            callback=self._delivery_callback,
+            callback=self._delivery_callback,  #Kafka发送消息后的回调函数，用来接收Kafka的发送结果
         )
         self._producer.flush(timeout=5)
         logger.info(f"[KafkaEventBus] Published to {topic}")
 
+    #创建一个 Kafka 消费者，订阅指定 Topic，并定义收到消息后如何处理。
     async def subscribe(
         self, topic: str, group_id: str, handler: Callable
     ) -> None:
@@ -142,11 +148,13 @@ class KafkaEventBus(EventBus):
             "auto.offset.reset": "latest",
             "enable.auto.commit": False,
         })
+        #订阅Topic，告诉 Consumer：后续从这个Topic拉取消息
         consumer.subscribe([topic])
 
         async def _consume_loop():
             while self._running:
-                msg = consumer.poll(timeout=1.0)
+                #从Kafka拉取消息
+                msg = consumer.poll(timeout=1.0) 
                 if msg is None:
                     await asyncio.sleep(0.1)
                     continue
@@ -156,17 +164,21 @@ class KafkaEventBus(EventBus):
 
                 try:
                     event_data = json.loads(msg.value().decode("utf-8"))
-                    await handler(event_data)
+                    #调用消息处理函数
+                    await handler(event_data) 
+                    #处理成功后提交消费位点
                     consumer.commit(asynchronous=False)
                 except Exception as e:
                     logger.error(f"[KafkaEventBus] Handler error: {e}")
                     await self._send_to_dlq(topic, msg.value(), str(e))
 
+        #保存消费循环：一个函数对象，因为没有括号，这里保存了这个函数是给下游用的，真正是在start的create_task启动的
         self._consumers.append((_consume_loop, consumer))
 
     async def start(self) -> None:
         self._running = True
         for consume_loop, _ in self._consumers:
+            #真正是在这执行的
             asyncio.create_task(consume_loop())
         logger.info("[KafkaEventBus] Kafka event bus started")
 

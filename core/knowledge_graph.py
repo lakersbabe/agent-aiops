@@ -225,6 +225,7 @@ class Neo4jKnowledgeGraph:
     def close(self) -> None:
         self._driver.close()
 
+    #初始化数据库约束和索引
     def init_schema(self) -> None:
         """初始化图模式（索引和约束）"""
         with self._driver.session() as session:
@@ -233,6 +234,7 @@ class Neo4jKnowledgeGraph:
             session.run("CREATE CONSTRAINT IF NOT EXISTS FOR (n:Node) REQUIRE n.name IS UNIQUE")
             session.run("CREATE INDEX IF NOT EXISTS FOR (a:Alert) ON (a.timestamp)")
 
+    #添加服务节点
     def add_service(self, name: str, properties: Optional[dict] = None) -> None:
         props = properties or {}
         with self._driver.session() as session:
@@ -252,6 +254,9 @@ class Neo4jKnowledgeGraph:
                 source=source, target=target,
             )
 
+    #不加 *：只能查直接依赖，加 *1..3：可以查所有的间接依赖。
+    #() 代表“一个任意节点”，不是空值。Cypher 用圆括号表示节点。    (x)：一个节点，给它起变量名。   x：一个节点，但不取变量名，因为后面不用引用它。
+    #n IN nodes(path)就是取出这条路径上的所有节点对象。|竖线后面表示：从每个节点取什么结果。这里取它的 name 属性。
     def find_root_causes(self, service: str, max_depth: int = 5) -> list[dict]:
         """Cypher 查询根因候选"""
         with self._driver.session() as session:
@@ -268,6 +273,8 @@ class Neo4jKnowledgeGraph:
             )
             return [dict(record) for record in result]
 
+    #先得到你传的service服务依赖节点dep，再查有哪些Change AFFECTS 这些dep节点
+    #例如第一句找到：dep=order-service  dep=payment-service  第二句会分别查：有哪些Change影响order-service？有哪些Change影响payment-service？
     def find_recent_changes(self, service: str, hours: int = 24) -> list[dict]:
         """查询关联变更"""
         with self._driver.session() as session:

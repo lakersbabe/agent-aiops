@@ -19,6 +19,17 @@ A: Pipeline 是线性的，无法处理条件分支、重试、跳过、回退�
    - 失败重试（Heal 执行失败 → 重试 3 次）
    - 人工介入（Change 被拒 → 暂停等待审批）
    - 检查点恢复（服务重启后从断点继续）
+
+后面可以加的内容：
+真正的 LangGraph                  没有使用
+Kafka 驱动 Agent 流转              没有
+持久化检查点                       没有，只保存在内存
+从断点继续执行                     没有
+RCA 低置信度后重新分析              没有
+Change 被拒绝后的回退/升级          没有
+真实人工审批暂停和恢复              没有
+Heal 后真实执行修复                 当前只是模拟
+故障恢复验证                       没有
 """
 
 import asyncio
@@ -63,6 +74,7 @@ class WorkflowNode:
         self.status = NodeStatus.PENDING
         self.retry_count = 0
 
+    #判断当前节点是否执行
     def should_execute(self, state: IncidentState) -> bool:
         if self.condition is None:
             return True
@@ -86,6 +98,7 @@ class Orchestrator:
 
     def _build_default_workflow(self) -> None:
         """构建默认工作流：Monitor → RCA → Heal → Change"""
+        #把同一个 event_bus 传给各个 Agent
         monitor = MonitorAgent(self.event_bus)
         rca = RCAAgent(self.event_bus)
         heal = HealAgent(self.event_bus, dry_run=True)
@@ -100,19 +113,19 @@ class Orchestrator:
             WorkflowNode(
                 name="rca",
                 agent=rca,
-                condition=lambda s: s.alert_event is not None,
+                condition=lambda s: s.alert_event is not None, #只有状态中存在告警时，才执行 RCA
             ),
             WorkflowNode(
                 name="heal",
                 agent=heal,
                 condition=lambda s: (
-                    s.rca_event is not None and s.rca_event.confidence >= 0.3
+                    s.rca_event is not None and s.rca_event.confidence >= 0.3 #有RCA结果并且RCA置信度>=0.3
                 ),
             ),
             WorkflowNode(
                 name="change",
                 agent=change,
-                condition=lambda s: s.heal_event is not None,
+                condition=lambda s: s.heal_event is not None, #只有 HealAgent 生成了修复事件，才执行 ChangeAgent 审批
             ),
         ]
 
@@ -122,12 +135,15 @@ class Orchestrator:
         metadata: Optional[dict] = None,
     ) -> IncidentState:
         """执行完整的事件处理工作流"""
+        #创建或使用状态
         state = initial_state or IncidentState()
+        #写入初始metadata
         if metadata:
             state.metadata = metadata
 
         logger.info(f"[Orchestrator] Starting workflow for incident {state.incident_id}")
 
+        #按顺序遍历节点
         for node in self._nodes:
             if not node.should_execute(state):
                 node.status = NodeStatus.SKIPPED
@@ -139,8 +155,14 @@ class Orchestrator:
 
             while node.retry_count <= node.max_retries:
                 try:
+                    """
+                    把当前 IncidentState 传给 Agent
+                    Agent 处理后返回新的 IncidentState
+                    编排器继续使用返回后的 state
+                    """
                     state = await node.agent.handle(state)
 
+                    #根据error_message判断是否重试
                     if state.error_message and node.retry_count < node.max_retries:
                         node.retry_count += 1
                         logger.warning(
@@ -178,8 +200,10 @@ class Orchestrator:
         return state
 
     def _save_checkpoint(self, state: IncidentState) -> None:
-        self._checkpoints[state.incident_id] = state.model_copy(deep=True)
+        #创建当前状态的深拷贝。这样保存的是当时的状态快照，而不是之后会继续变化的同一个对象。
+        self._checkpoints[state.incident_id] = state.model_copy(deep=True) 
 
+    #根据故障 ID 查询之前保存的状态快照：
     def get_checkpoint(self, incident_id: str) -> Optional[IncidentState]:
         return self._checkpoints.get(incident_id)
 
@@ -205,6 +229,7 @@ async def run_demo():
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
 
+    #创建内存事件总线
     event_bus = InMemoryEventBus()
     await event_bus.start()
 
