@@ -1,5 +1,7 @@
 """事件总线 — Kafka 生产者/消费者封装
 
+**这边主要看kafka的把，内存的就是demo用的**
+
 核心设计：
 1. 所有 Agent 间通信都通过事件总线，实现完全解耦
 2. 支持 topic 路由：不同事件类型发往不同 topic
@@ -131,7 +133,7 @@ class KafkaEventBus(EventBus):
         self._producer.produce(
             topic=topic,
             value=event_data.encode("utf-8"),
-            callback=self._delivery_callback,  #Kafka发送消息后的回调函数，用来接收Kafka的发送结果
+            callback=self._delivery_callback,  
         )
         self._producer.flush(timeout=5)
         logger.info(f"[KafkaEventBus] Published to {topic}")
@@ -176,6 +178,7 @@ class KafkaEventBus(EventBus):
         self._consumers.append((_consume_loop, consumer))
 
     async def start(self) -> None:
+        #这里把running打开，这样_consume_loop就会持续执行，不断拉取消息--处理消息--提交 offset或发送DLQ
         self._running = True
         for consume_loop, _ in self._consumers:
             #真正是在这执行的
@@ -190,13 +193,14 @@ class KafkaEventBus(EventBus):
             self._producer.flush(timeout=10)
         logger.info("[KafkaEventBus] Kafka event bus stopped")
 
+    #Kafka发送消息后的回调函数，用来接收Kafka的发送结果
     @staticmethod
     def _delivery_callback(err, msg):
         if err:
             logger.error(f"[KafkaEventBus] Delivery failed: {err}")
         else:
             logger.debug(f"[KafkaEventBus] Delivered to {msg.topic()} [{msg.partition()}]")
-
+    #当消费者处理某条Kafka消息失败时，把这条失败消息复制到死信队列（Dead Letter Queue）中，避免它被直接丢掉。
     async def _send_to_dlq(self, original_topic: str, value: bytes, error: str) -> None:
         dlq_topic = f"{original_topic}.dlq"
         if self._producer:
